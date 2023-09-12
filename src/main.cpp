@@ -26,7 +26,7 @@ void setup() {
 // prescaler of 1 will get us 8MHz - 488Hz
 // User a higher prescaler for lower freqncies
 
-#define PRESCALER 1
+#define PRESCALER 4
 #define PRESCALER_BITS 0x01
 
 #define CLK 16000000UL    // Default clock speed is 16MHz on Arduino Uno
@@ -41,19 +41,15 @@ void setup() {
 // Demo by cycling through some phase shifts at 50Khz  
 
 void loop() {
-
-  setWaveforms( 50000 , 0 );
-
-  delay(1000); 
-
-  setWaveforms( 50000 , 90 );
-
-  delay(1000); 
-
-  setWaveforms( 50000 , 180 );
-
-  delay(1000); 
-
+  setWaveforms(50, 0);
+  delay(10000);
+  for (int i = 0; i < 151; i = i + 1) {
+    setWaveforms( (i + 30) , 90 );
+    delay(100);
+  }
+  delay(10000);
+  setWaveforms(180, 0);
+  delay(10000);
 
 }
 
@@ -61,8 +57,9 @@ void loop() {
 int setWaveforms( unsigned long freq , int shift ) {
 
   // This assumes prescaler = 1. For lower freqnecies, use a larger prescaler.
-
-  unsigned long clocks_per_toggle = (CLK / freq) / 2;    // /2 becuase it takes 2 toggles to make a full wave
+  
+  // Calculate the number of clock cycles per toggle
+  unsigned long clocks_per_toggle = (CLK / (freq * PRESCALER)) / 4;    // /2 becuase it takes 2 toggles to make a full wave
 
   ICR1 = clocks_per_toggle;
 
@@ -73,13 +70,12 @@ int setWaveforms( unsigned long freq , int shift ) {
   // Turn on timer now if is was not already on
   // Clock source = clkio/1 (no prescaling)
   // Note: you could use a prescaller here for lower freqnencies
-  TCCR1B |= _BV( CS10 ); 
-  
+  TCCR1B |= _BV( CS11 ); 
+
   // Prescale to obtain 50hz range
   // TCCR1B &= ~(_BV(CS12) | _BV(CS11) | _BV(CS10));
 
 
   // Prescale to obtain 180hz range
   // TCCR1B |= _BV( CS11 );
-
 }

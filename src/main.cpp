@@ -1,8 +1,14 @@
 #include <Arduino.h>
+bool NoPaso = true;
+bool noBreake = false;
+int DefSpeed = 180;
+int DefDelay = 1500;
+int DefAngle = 90;
 
 // put function declarations here:
-int setWaveforms(unsigned long, int);
-
+void setWaveforms(unsigned long, int);
+void accelerate(int speed, int delayTime);
+void breakMotor(int speed, int delayTime);
 
 // This code demonstrates how to generate two output signals
 // with variable phase shift between them using an AVR Timer 
@@ -10,8 +16,12 @@ int setWaveforms(unsigned long, int);
 // More AVR Timer Tricks at http://josh.com
 
 void setup() {
-  pinMode( 9 , OUTPUT );    // Arduino Pin  9 = OCR1A
-  pinMode( 10 , OUTPUT );   // Arduino Pin 10 = OCR1B
+  pinMode( 9 , OUTPUT );       // Arduino Pin  9 = OCR1A
+  pinMode( 10 , OUTPUT );      // Arduino Pin 10 = OCR1B
+  pinMode( A3 , INPUT_PULLUP); // Arduino Pin A3 = Button Break
+  pinMode(A5, INPUT_PULLUP);   // Arduino Pin A5 = Button Acelerate
+  pinMode(A4, INPUT_PULLUP);   // Arduino Pin A4 = Button Hi Speed
+  digitalWrite(A7, LOW);       // Set OC0A to low to enable Button
 
   // Both outputs in toggle mode  
   TCCR1A = _BV( COM1A0 ) |_BV( COM1B0 );
@@ -41,20 +51,46 @@ void setup() {
 // Demo by cycling through some phase shifts at 50Khz  
 
 void loop() {
-  setWaveforms(50, 0);
-  delay(10000);
-  for (int i = 0; i < 151; i = i + 1) {
-    setWaveforms( (i + 30) , 90 );
-    delay(100);
+  if (digitalRead(A4) == HIGH) {
+    DefSpeed = 50;
+  } else {
+    DefSpeed = 180;
   }
-  delay(10000);
-  setWaveforms(180, 0);
-  delay(10000);
+  
+  if (digitalRead(A5) == LOW) {
+    digitalWrite(LED_BUILTIN, HIGH);
+    if (NoPaso) {
+      accelerate(DefSpeed, DefDelay);
+      NoPaso = false;
+    }
+    setWaveforms( DefSpeed , DefAngle );
+    noBreake = true;
+  }
+  else {
+    // Turn off timer
+    TCCR1B &= ~(_BV(CS12) | _BV(CS11) | _BV(CS10));
+    digitalWrite(LED_BUILTIN, LOW);
+    NoPaso = true;
+  }
 
+  if (digitalRead(A3) == LOW) {
+    if (noBreake) {
+      breakMotor(DefSpeed, DefDelay);
+      noBreake = false;
+    }
+    // Turn off timer
+    TCCR1B &= ~(_BV(CS12) | _BV(CS11) | _BV(CS10));
+    digitalWrite(LED_BUILTIN, LOW);
+  }   
+
+
+
+
+  delay(10);
 }
 
 // put function definitions here:
-int setWaveforms( unsigned long freq , int shift ) {
+void setWaveforms( unsigned long freq , int shift ) {
 
   // This assumes prescaler = 1. For lower freqnecies, use a larger prescaler.
   
@@ -78,4 +114,20 @@ int setWaveforms( unsigned long freq , int shift ) {
 
   // Prescale to obtain 180hz range
   // TCCR1B |= _BV( CS11 );
+}
+
+void accelerate(int speed, int delayTime) {
+  int intdelay = delayTime / (speed - 30);
+  for (int i = 30; i <= speed; i++) {
+    setWaveforms( i , DefAngle );
+    delay(intdelay);
+  }
+}
+
+void breakMotor(int speed, int delayTime) {
+  int intdelay = delayTime / (speed - 30);
+  for (int i = speed; i >= 30; i--) {
+    setWaveforms( i , DefAngle );
+    delay(intdelay);
+  }
 }

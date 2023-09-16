@@ -74,6 +74,7 @@ void loop() {
   }
 
   if (digitalRead(A3) == LOW) {
+    digitalWrite(LED_BUILTIN, HIGH);
     if (noBreake) {
       breakMotor(DefSpeed, DefDelay);
       noBreake = false;

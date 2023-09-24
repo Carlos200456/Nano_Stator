@@ -1,14 +1,19 @@
 #include <Arduino.h>
+// #include <TimerOne.h>
+// #include <TimerThree.h>
+
 bool NoPaso = true;
 bool noBreake = false;
 int DefSpeed = 180;
 int DefDelay = 1500;
 int DefAngle = 90;
+const int pwmFrequency = 10; // 100Hz
+
 
 // put function declarations here:
 void setWaveforms(unsigned long, int);
-void accelerate(int speed, int delayTime);
-void breakMotor(int speed, int delayTime);
+// void accelerate(int speed, int delayTime);
+// void breakMotor(int speed, int delayTime);
 
 // This code demonstrates how to generate two output signals
 // with variable phase shift between them using an AVR Timer 
@@ -16,21 +21,50 @@ void breakMotor(int speed, int delayTime);
 // More AVR Timer Tricks at http://josh.com
 
 void setup() {
-  pinMode( 9 , OUTPUT );       // Arduino Pin  9 = OCR1A
-  pinMode( 10 , OUTPUT );      // Arduino Pin 10 = OCR1B
   pinMode( A3 , INPUT_PULLUP); // Arduino Pin A3 = Button Break
   pinMode(A5, INPUT_PULLUP);   // Arduino Pin A5 = Button Acelerate
   pinMode(A4, INPUT_PULLUP);   // Arduino Pin A4 = Button Hi Speed
   digitalWrite(A7, LOW);       // Set OC0A to low to enable Button
 
-  // Both outputs in toggle mode  
-  TCCR1A = _BV( COM1A0 ) |_BV( COM1B0 );
+  // Configure Timer 0 for Phase-Correct PWM
+  pinMode(5, OUTPUT);
+  pinMode(6, OUTPUT);
+  TCCR0A = 0b00100001; // Phase-Correct PWM mode
+  // TCCR0B = 0b00000000; // No clock source (timer stopped)
+  // TCCR0B = 0b00000010; // Clock divided by 8
+  // TCCR0B = 0b00000011; // Clock divided by 64
+  // TCCR0B = 0b00000100; // Clock divided by 256
+  TCCR0B = 0b00000101; // Clock divided by 1024
+  TCCR0A = 0b11100000 | (TCCR0A & 0b00001111) ; 
+  // Bit 7 (COM2A1) 0: OC2A disconnected. 1: Toggle OC2A on Compare Match.
+  // Bit 6 (COM2A0) 0: OC2A disconnected. 1: Clear OC2A on Compare Match (non-inverted mode).
+  // Bit 5 (COM2B1) 0: OC2B disconnected. 1: Toggle OC2B on Compare Match.
+  // Bit 4 (COM2B0) 0: OC2B disconnected. 1: Clear OC2B on Compare Match (non-inverted mode).
+  // Bit 3 (RESERVED): This bit is reserved and should be written as 0.
+  // Bit 2 (WGM21): Waveform Generation Mode 0: Normal mode. 1: CTC (Clear Timer on Compare Match) mode. Timer 2 counts up to the value specified in OCR2A, then resets.
+  // Bit 1 (WGM20): Waveform Generation Mode 0: Normal mode. 1: CTC (Clear Timer on Compare Match) mode. Timer 2 counts up to the value specified in OCR2A, then resets.
+  // Bit 0 (FOC2A): Force Output Compare A 0: Normal operation. This bit is not used in PWM modes. 1: Force OC2A to logic high.
+  OCR0A = 142;
+  OCR0B = 112;
 
-  // CTC Waveform Generation Mode
-  // TOP=ICR1  
-  // Note clock is left off for now
-  TCCR1B = _BV( WGM13) | _BV( WGM12);
-  OCR1A = 0;    // First output is the base, it always toggles at 0
+  
+  // Configure Timer 2 for Phase-Correct PWM
+  pinMode(3, OUTPUT);
+  pinMode(11, OUTPUT);
+  // Set the initial counter value for Timer 2
+  TCNT2 = 128;
+  TCCR2A = 0b00100001; // Phase-Correct PWM mode
+  // TCCR2B = 0b00000000; // No clock source (timer stopped)
+  // TCCR2B = 0b00000001; // Clock with no prescaling (full clock speed)
+  // TCCR2B = 0b00000010; // Clock divided by 8
+  // TCCR2B = 0b00000011; // Clock divided by 32
+  // TCCR2B = 0b00000100; // Clock divided by 64
+  // TCCR2B = 0b00000101; // Clock divided by 128
+  // TCCR2B = 0b00000110; // Clock divided by 256
+  TCCR2B = 0b00000111; // Clock divided by 1024
+  TCCR2A = 0b11100000 | (TCCR2A & 0b00001111) ;
+  OCR2A = 142;
+  OCR2B = 112;
 }
 
 // prescaler of 1 will get us 8MHz - 488Hz
@@ -60,10 +94,10 @@ void loop() {
   if (digitalRead(A5) == LOW) {
     digitalWrite(LED_BUILTIN, HIGH);
     if (NoPaso) {
-      accelerate(DefSpeed, DefDelay);
+//      accelerate(DefSpeed, DefDelay);
       NoPaso = false;
     }
-    setWaveforms( DefSpeed , DefAngle );
+//    setWaveforms( DefSpeed , DefAngle );
     noBreake = true;
   }
   else {
@@ -76,18 +110,13 @@ void loop() {
   if (digitalRead(A3) == LOW) {
     digitalWrite(LED_BUILTIN, HIGH);
     if (noBreake) {
-      breakMotor(DefSpeed, DefDelay);
+//      breakMotor(DefSpeed, DefDelay);
       noBreake = false;
     }
     // Turn off timer
     TCCR1B &= ~(_BV(CS12) | _BV(CS11) | _BV(CS10));
     digitalWrite(LED_BUILTIN, LOW);
   }   
-
-
-
-
-  delay(10);
 }
 
 // put function definitions here:
@@ -117,18 +146,18 @@ void setWaveforms( unsigned long freq , int shift ) {
   // TCCR1B |= _BV( CS11 );
 }
 
-void accelerate(int speed, int delayTime) {
-  int intdelay = delayTime / (speed - 30);
-  for (int i = 30; i <= speed; i++) {
-    setWaveforms( i , DefAngle );
-    delay(intdelay);
-  }
-}
+// void accelerate(int speed, int delayTime) {
+//   int intdelay = delayTime / (speed - 30);
+//   for (int i = 30; i <= speed; i++) {
+//     setWaveforms( i , DefAngle );
+//     delay(intdelay);
+//   }
+// }
 
-void breakMotor(int speed, int delayTime) {
-  int intdelay = delayTime / (speed - 30);
-  for (int i = speed; i >= 30; i--) {
-    setWaveforms( i , DefAngle );
-    delay(intdelay);
-  }
-}
+// void breakMotor(int speed, int delayTime) {
+//   int intdelay = delayTime / (speed - 30);
+//   for (int i = speed; i >= 30; i--) {
+//     setWaveforms( i , DefAngle );
+//     delay(intdelay);
+//   }
+// }

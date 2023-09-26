@@ -11,13 +11,15 @@ int DefAngle = 90;
 void Frec30hz(void);
 void Frec120hz(void);
 void setWaveforms(unsigned long, int);
-// void accelerate(int speed, int delayTime);
-// void breakMotor(int speed, int delayTime);
+void accelerate(int speed, int delayTime);
+void breakMotor(int speed, int delayTime);
 
-// This code demonstrates how to generate two output signals
-// with variable phase shift between them using an AVR Timer 
-// The output shows up on Arduino pin 9, 10
-// More AVR Timer Tricks at http://josh.com
+// prescaler of 1 will get us 8MHz - 488Hz
+// User a higher prescaler for lower freqncies
+#define PRESCALER 4
+#define PRESCALER_BITS 0x01
+#define CLK 16000000UL    // Default clock speed is 16MHz on Arduino Uno
+
 
 void setup() {
   pinMode( A0 , INPUT_PULLUP); // Arduino Pin A0 = Button 30Hz.
@@ -30,14 +32,50 @@ void setup() {
   // Configure Timer 2 for Phase-Correct PWM
   pinMode(3, OUTPUT);
   pinMode(11, OUTPUT);
+  // initialize Timer1
+  cli();          // disable global interrupts
+  TCCR1A = 0;     // set entire TCCR1A register to 0
+  TCCR1B = 0;     // same for TCCR1B
+  TCCR1B |= (1 << WGM12);    // turn on CTC mode
+  OCR1A = 1000;    //Set compare match register to some value. Not important, it gets changed later
+  bitWrite(TCCR1B, CS10, 1);   //Set prescaler (it's over-written later anyway)
+  TIMSK1 |= (1 << OCIE1A);     // enable timer compare interrupt:
+  TCCR1A = _BV( COM1A0 ) |_BV( COM1B0 );  // toggle OC1A and OC1B on Compare Match
+  // Both outputs in toggle mode  
+  // CTC Waveform Generation Mode
+  // TOP=ICR1  
+  // Note clock is left off for now
+  TCCR1B = _BV( WGM13) | _BV( WGM12);
+  OCR1A = 0;    // First output is the base, it always toggles at 0
+  sei();          // enable global interrupts   
+}
+
+ISR(TIMER1_COMPA_vect)
+{
+  digitalWrite(5,!digitalRead(5));
+  //OR: With direct pin manipulations it's only 75 ns to switch the pin
+  // but then must add a monostable 555 to lengthen the pulse for stepper driver board
+  // PORTB  &= ~bit(7);//switch off pin 13
+  // PORTB  |= bit(7);//switch on pin 13
+}
+
+ISR(TIMER1_COMPB_vect)
+{
+  digitalWrite(6,!digitalRead(6));
+  //OR: With direct pin manipulations it's only 75 ns to switch the pin
+  // but then must add a monostable 555 to lengthen the pulse for stepper driver board
+  // PORTB  &= ~bit(7);//switch off pin 13
+  // PORTB  |= bit(7);//switch on pin 13
 }
 
 void loop() {
   if (!digitalRead(A0)) {
     if (NoPaso) {
-      Frec30hz();
+      accelerate(DefSpeed, DefDelay);
+      // Frec30hz();
       NoPaso = false;
     }
+    setWaveforms( DefSpeed , DefAngle );
     noBreake = true;
   }
   else {
@@ -68,11 +106,31 @@ void loop() {
   }
 }
 
-// put function definitions here:
 void setWaveforms( unsigned long freq , int shift ) {
-  // Set the initial counter value for Timers
-
+  // Calculate the number of clock cycles per toggle
+  unsigned long clocks_per_toggle = (CLK / (freq * PRESCALER)) / 4;    // /2 becuase it takes 2 toggles to make a full wave
+  ICR1 = clocks_per_toggle;
+  unsigned long offset_clocks = (clocks_per_toggle * shift) / 180UL; // Do mult first to save precision
+  OCR1B= offset_clocks;
+  // Turn on timer now if is was not already on
+  TCCR1B |= _BV( CS11 ); 
 }
+
+void accelerate(int speed, int delayTime) {
+  int intdelay = delayTime / (speed - 30);
+  for (int i = 30; i <= speed; i++) {
+    setWaveforms( i , DefAngle );
+    delay(intdelay);
+  }
+}
+
+// void breakMotor(int speed, int delayTime) {
+//   int intdelay = delayTime / (speed - 30);
+//   for (int i = speed; i >= 30; i--) {
+//     setWaveforms( i , DefAngle );
+//     delay(intdelay);
+//   }
+// }
 
 void Frec30hz(void) {
   digitalWrite(LED_BUILTIN, HIGH);
@@ -133,7 +191,6 @@ void Frec120hz(void) {
   // Bit 0 (FOC2A): Force Output Compare A 0: Normal operation. This bit is not used in PWM modes. 1: Force OC2A to logic high.
   OCR0A = 142;
   OCR0B = 112;
-
   
   // Set the initial counter value for Timer 2
   TCNT2 = 128;
@@ -150,19 +207,3 @@ void Frec120hz(void) {
   OCR2A = 142;
   OCR2B = 112;
 }
-
-// void accelerate(int speed, int delayTime) {
-//   int intdelay = delayTime / (speed - 30);
-//   for (int i = 30; i <= speed; i++) {
-//     setWaveforms( i , DefAngle );
-//     delay(intdelay);
-//   }
-// }
-
-// void breakMotor(int speed, int delayTime) {
-//   int intdelay = delayTime / (speed - 30);
-//   for (int i = speed; i >= 30; i--) {
-//     setWaveforms( i , DefAngle );
-//     delay(intdelay);
-//   }
-// }

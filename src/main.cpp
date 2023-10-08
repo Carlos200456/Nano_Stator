@@ -2,6 +2,8 @@
 
 bool NoPaso = true;
 bool noBreake = false;
+boolean toggle1 = 0;
+boolean toggle2 = 0;
 int DefSpeed = 180;
 int DefDelay = 1500;
 int DefAngle = 90;
@@ -22,8 +24,8 @@ void breakMotor(int speed, int delayTime);
 
 
 void setup() {
-  pinMode( A0 , INPUT_PULLUP); // Arduino Pin A0 = Button 30Hz.
-  pinMode(A1, INPUT_PULLUP);   // Arduino Pin A1 = Button 120Hz.
+  pinMode( 0 , INPUT_PULLUP); // Arduino Pin A0 = Button 30Hz.
+  pinMode(1, INPUT_PULLUP);   // Arduino Pin A1 = Button 120Hz.
   pinMode(A2, INPUT_PULLUP);   // Arduino Pin A2 = Button Accelerate.
   
   // Configure Timer 0 for Phase-Correct PWM
@@ -34,52 +36,68 @@ void setup() {
   pinMode(11, OUTPUT);
   // initialize Timer1
   cli();          // disable global interrupts
-  TCCR1A = 0;     // set entire TCCR1A register to 0
-  TCCR1B = 0;     // same for TCCR1B
-  TCCR1B |= (1 << WGM12);    // turn on CTC mode
-  OCR1A = 1000;    //Set compare match register to some value. Not important, it gets changed later
-  bitWrite(TCCR1B, CS10, 1);   //Set prescaler (it's over-written later anyway)
-  TIMSK1 |= (1 << OCIE1A);     // enable timer compare interrupt:
-  TCCR1A = _BV( COM1A0 ) |_BV( COM1B0 );  // toggle OC1A and OC1B on Compare Match
-  // Both outputs in toggle mode  
-  // CTC Waveform Generation Mode
-  // TOP=ICR1  
-  // Note clock is left off for now
-  TCCR1B = _BV( WGM13) | _BV( WGM12);
-  OCR1A = 0;    // First output is the base, it always toggles at 0
+//set timer1 interrupt at 1Hz
+  TCCR1A = 0;// set entire TCCR1A register to 0
+  TCCR1B = 0;// same for TCCR1B
+  TCNT1  = 0;//initialize counter value to 0
+  // set compare match register
+  OCR1A = 2500;  // = (16*10^6) / (50*256) - 1 (must be <65536)
+  // set compare match register for 1hz increments
+  OCR1B = 1250;
+  // turn on CTC mode
+  TCCR1B |= (1 << WGM12);
+  // Set CS11 and CS10 bits for 64 prescaler
+  TCCR1B |= (1 << CS11) | (1 << CS10);  
+  // enable timer compare interrupt
+  TIMSK1 |= (1 << OCIE1A);
+  TIMSK1 |= (1 << OCIE1B);
   sei();          // enable global interrupts   
 }
 
-ISR(TIMER1_COMPA_vect)
-{
-  digitalWrite(5,!digitalRead(5));
-  //OR: With direct pin manipulations it's only 75 ns to switch the pin
-  // but then must add a monostable 555 to lengthen the pulse for stepper driver board
-  // PORTB  &= ~bit(7);//switch off pin 13
-  // PORTB  |= bit(7);//switch on pin 13
+ISR(TIMER1_COMPA_vect){//timer1 interrupt 1Hz toggles pin 13 (LED)
+//generates pulse wave of frequency 1Hz/2 = 0.5kHz (takes two cycles for full wave- toggle high then toggle low)
+  if (toggle1){
+    digitalWrite(6,LOW);
+    delayMicroseconds(1);
+    digitalWrite(5,HIGH);
+    toggle1 = 0;
+  }
+  else{
+    digitalWrite(5,LOW);
+    delayMicroseconds(1);
+    digitalWrite(6,HIGH);
+    toggle1 = 1;
+  }
 }
 
-ISR(TIMER1_COMPB_vect)
-{
-  digitalWrite(6,!digitalRead(6));
-  //OR: With direct pin manipulations it's only 75 ns to switch the pin
-  // but then must add a monostable 555 to lengthen the pulse for stepper driver board
-  // PORTB  &= ~bit(7);//switch off pin 13
-  // PORTB  |= bit(7);//switch on pin 13
+ISR(TIMER1_COMPB_vect){//timer1 interrupt 1Hz toggles pin 13 (LED)
+//generates pulse wave of frequency 1Hz/2 = 0.5kHz (takes two cycles for full wave- toggle high then toggle low)
+  if (toggle2){
+    digitalWrite(11,LOW);
+    delayMicroseconds(1);
+    digitalWrite(3,HIGH);
+    toggle2 = 0;
+  }
+  else{
+    digitalWrite(3,LOW);
+    delayMicroseconds(1);
+    digitalWrite(11,HIGH);
+    toggle2 = 1;
+  }
 }
 
 void loop() {
-  if (!digitalRead(A0)) {
+  if (!digitalRead(0)) {
     if (NoPaso) {
-      accelerate(DefSpeed, DefDelay);
-      // Frec30hz();
+      // accelerate(DefSpeed, DefDelay);
+      Frec30hz();
       NoPaso = false;
     }
-    setWaveforms( DefSpeed , DefAngle );
+    // setWaveforms( DefSpeed , DefAngle );
     noBreake = true;
   }
   else {
-    if(digitalRead(A1)){
+    if(digitalRead(1)){
       // Turn off timer0 and timer2
       TCCR0B = 0b00000000; // No clock source (timer stopped)
       TCCR2B = 0b00000000; // No clock source (timer stopped)
@@ -88,7 +106,7 @@ void loop() {
     }
   }
 
-  if (!digitalRead(A1)) {
+  if (!digitalRead(1)) {
     if (NoPaso) {
       Frec120hz();
       NoPaso = false;
@@ -96,7 +114,7 @@ void loop() {
     noBreake = true;
   }
   else {
-    if (digitalRead(A0)){
+    if (digitalRead(0)){
       // Turn off timer0 and timer2
       TCCR0B = 0b00000000; // No clock source (timer stopped)
       TCCR2B = 0b00000000; // No clock source (timer stopped)

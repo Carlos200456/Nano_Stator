@@ -87,9 +87,9 @@ ISR(TIMER1_COMPB_vect){   // Timer1 interrupt B toggles pin 11 and 3
 
 void loop() {
   if (!digitalRead(A3)) {   // High Speed
-    DefSpeed = 180; 
+    DefSpeed = 200; 
   } else {
-    DefSpeed = 60;
+    DefSpeed = 50;
   }
 
   if (!digitalRead(0)) {    // Accelerate
@@ -127,6 +127,8 @@ void loop() {
 }
 
 void setWaveforms( unsigned long freq , int shift ) {
+  while (TCNT1 > 5);   // Wait for Timer1 to be in range
+  TCNT1  = 0;//initialize counter value to 0
   // Calculate the number of clock cycles per toggle
   unsigned long clocks_per_toggle = (CLK / (freq * PRESCALER)) / 2;    // /2 becuase it takes 2 toggles to make a full wave
   // set compare match register for Frequency Generation
@@ -138,7 +140,7 @@ void setWaveforms( unsigned long freq , int shift ) {
 
 void accelerate(int speed, int delayTime) {
   if (RealSpeed == 0) RealSpeed = 30;
-  int intdelay = delayTime / (speed - RealSpeed);
+  int intdelay = (delayTime / 2) / (speed - RealSpeed);
   for (int i = RealSpeed; i <= speed; i++) {
     setWaveforms( i , DefAngle );
     delay(intdelay);
@@ -146,7 +148,7 @@ void accelerate(int speed, int delayTime) {
 }
 
 void breakMotor(int speed, int delayTime) {
-  int intdelay = delayTime / (speed - 30);
+  int intdelay = (delayTime / 2) / (speed - 30);
   for (int i = speed; i >= 30; i--) {
     setWaveforms( i , DefAngle );
     delay(intdelay);

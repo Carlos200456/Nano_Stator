@@ -55,8 +55,8 @@ void setup() {
   u8x8.print("Nano Starter");
   u8x8.setCursor(0,3);             // Column, Row
   u8x8.print("Version 1.Git");     // SOFTWARE VERSION ---------------------------<<<<<<<<<<<<<<<<
-  // delay(2000);
-  // u8x8.clearDisplay();
+  delay(2000);
+  u8x8.clearDisplay();
   #endif
 
   // Configure Timer 1 for Frequency Generation
@@ -78,6 +78,22 @@ void setup() {
   digitalWrite(6,LOW);
   digitalWrite(11,LOW);
   NoPaso = true;
+
+  // Write a menu on display
+
+  #ifdef OLED
+  u8x8.setCursor(0,0);             // Column, Row
+  u8x8.print("Speed : ");
+  u8x8.setCursor(0,1);             // Column, Row
+  u8x8.print("Angle : ");
+  u8x8.setCursor(0,2);             // Column, Row
+  u8x8.print("Delay : ");
+  u8x8.setCursor(0,3);             // Column, Row
+  u8x8.print("Status: ");
+  u8x8.setCursor(0,4);             // Column, Row
+  u8x8.print("Real S: ");
+  #endif
+
 }
 
 ISR(TIMER1_COMPA_vect){   // Timer1 interrupt A toggles pin 5 and 6
@@ -116,6 +132,18 @@ void loop() {
   } else {
     DefSpeed = 50;
   }
+  u8x8.setCursor(8,0);             // Column, Row
+  u8x8.print(DefSpeed);
+  u8x8.print("  ");
+  u8x8.setCursor(8,1);             // Column, Row
+  u8x8.print(DefAngle);
+  u8x8.print("  ");
+  u8x8.setCursor(8,2);             // Column, Row
+  u8x8.print(DefDelay);
+  u8x8.print("  ");
+  u8x8.setCursor(8,4);             // Column, Row
+  u8x8.print(RealSpeed);
+  u8x8.print("  ");
 
   if (!digitalRead(0)) {    // Accelerate
     if (DefSpeed > RealSpeed) {

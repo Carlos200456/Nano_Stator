@@ -1,4 +1,15 @@
 #include <Arduino.h>
+#include <U8g2lib.h>
+#include <Wire.h>
+
+#define OLED          // Con Display OLED
+
+#ifdef OLED
+// OLED 0.96"
+// U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(/* reset=*/ U8X8_PIN_NONE);
+// OLED 1.3"
+U8X8_SH1106_128X64_NONAME_HW_I2C u8x8(/* reset=*/ U8X8_PIN_NONE);
+#endif
 
 bool NoPaso = true;
 bool noBreake = false;
@@ -33,6 +44,20 @@ void setup() {
   pinMode(6, OUTPUT);
   pinMode(3, OUTPUT);
   pinMode(11, OUTPUT);
+
+  #ifdef OLED
+  u8x8.begin();  // initialize with the I2C
+  u8x8.setPowerSave(0);
+  // init done
+  u8x8.setFont(u8x8_font_pxplustandynewtv_r);  // u8x8_font_torussansbold8_r, u8x8_font_chroma48medium8_r, u8x8_font_victoriamedium8_r, u8x8_font_pxplustandynewtv_r
+  u8x8.draw1x2String(0,0,"Pimax S.R.L.");
+  u8x8.setCursor(0,2);             // Column, Row
+  u8x8.print("Nano Starter");
+  u8x8.setCursor(0,3);             // Column, Row
+  u8x8.print("Version 1.Git");     // SOFTWARE VERSION ---------------------------<<<<<<<<<<<<<<<<
+  // delay(2000);
+  // u8x8.clearDisplay();
+  #endif
 
   // Configure Timer 1 for Frequency Generation
   TCCR1A = 0;// set entire TCCR1A register to 0

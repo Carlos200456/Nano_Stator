@@ -52,6 +52,7 @@ void configTimerForMeasure(void);
 void setup() {
   pinMode( 0 , INPUT_PULLUP);  // Arduino Pin 0 = Button Accelerate.
   pinMode(1, INPUT_PULLUP);    // Arduino Pin 1 = Button Break
+  pinMode(2, INPUT_PULLUP);    // Arduino Pin 2 = Frequency Feedback
   pinMode(A3, INPUT_PULLUP);   // Arduino Pin A3 = Button High Speed
   
   pinMode(5, OUTPUT);

@@ -11,6 +11,18 @@
 U8X8_SH1106_128X64_NONAME_HW_I2C u8x8(/* reset=*/ U8X8_PIN_NONE);
 #endif
 
+// Define the pin for the frequency measurement
+#define INPUT_PIN 2
+
+// Variable to store the frequency
+volatile unsigned long frequency;
+
+// Variable to store the time of the last pulse
+volatile unsigned long lastPulseTime, previousPulseTime;
+
+uint8_t saveTCCMode;
+uint8_t saveTIMMode;
+
 bool NoPaso = true;
 bool noBreake = false;
 boolean toggle1 = 0;
@@ -27,11 +39,13 @@ int DefAngle = 90;
 void setWaveforms(unsigned long, int);
 void accelerate(int speed, int delayTime);
 void breakMotor(int speed, int delayTime);
+void countPulse(void);
+void configTimerForPulse(void);
+void configTimerForMeasure(void);
 
 // prescaler of 1 will get us 8MHz - 488Hz
 // User a higher prescaler for lower freqncies
 #define PRESCALER 64
-#define PRESCALER_BITS 0x01
 #define CLK 16000000UL    // Default clock speed is 16MHz on Arduino Uno
 
 
@@ -59,20 +73,10 @@ void setup() {
   u8x8.clearDisplay();
   #endif
 
-  // Configure Timer 1 for Frequency Generation
-  TCCR1A = 0;// set entire TCCR1A register to 0
-  TCCR1B = 0;// same for TCCR1B
-  TCNT1  = 0;//initialize counter value to 0
-  // turn on CTC mode
-  TCCR1B |= (1 << WGM12);
-  // Set CS11 and CS10 bits for 64 prescaler
-  TCCR1B |= (1 << CS11) | (1 << CS10);  
-  // enable timer compare interrupt
-  TIMSK1 |= (1 << OCIE1A);
-  TIMSK1 |= (1 << OCIE1B);
-  // Turn off Timer 1 clock source
-  savePrescale = TCCR1B & (0b111<<CS10);
-  TCCR1B &= ~(0b111<<CS10); // Stop Timer1 Clock
+  // Save TCC mode
+  saveTCCMode = TCCR1B;
+  // Save Timer 1 interrupt mask
+  saveTIMMode = TIMSK1;
   digitalWrite(3,LOW);
   digitalWrite(5,LOW);
   digitalWrite(6,LOW);
@@ -91,9 +95,95 @@ void setup() {
   u8x8.setCursor(0,3);             // Column, Row
   u8x8.print("Status: ");
   u8x8.setCursor(0,4);             // Column, Row
-  u8x8.print("Real S: ");
+  u8x8.print("Real F: ");
   #endif
 
+  // Attach the interrupt
+  attachInterrupt(digitalPinToInterrupt(INPUT_PIN), countPulse, RISING);
+}
+
+void loop() {
+  if (!digitalRead(A3)) {   // High Speed
+    DefSpeed = 200; 
+  } else {
+    DefSpeed = 50;
+  }
+  u8x8.setCursor(8,0);             // Column, Row
+  u8x8.print(DefSpeed);
+  u8x8.print("  ");
+  u8x8.setCursor(8,1);             // Column, Row
+  u8x8.print(DefAngle);
+  u8x8.print("  ");
+  u8x8.setCursor(8,2);             // Column, Row
+  u8x8.print(DefDelay);
+  u8x8.print("  ");
+  u8x8.setCursor(8,4);             // Column, Row
+  u8x8.print(frequency);
+  u8x8.print("  ");
+
+  if (previousPulseTime != lastPulseTime) {
+    // Calculate frequency in Hz
+    frequency = 1000 / (lastPulseTime - previousPulseTime);
+    previousPulseTime = lastPulseTime;
+  }
+
+  if (!digitalRead(0)) {    // Accelerate
+    if (DefSpeed > RealSpeed) {
+      NoPaso = true;
+    }
+    if (NoPaso) {
+      NoPaso = false;
+      configTimerForPulse();
+      // Turn on timer now if is was not already on
+      // TCCR1B |= savePrescale;  // Restart Timer1 clock.
+      setWaveforms( 30 , DefAngle );
+      Enable = true;
+      accelerate(DefSpeed, DefDelay);
+      setWaveforms( DefSpeed , DefAngle );
+      RealSpeed = DefSpeed;
+    }
+    noBreake = true;
+  }
+
+  if (!digitalRead(1)) {    // Break
+    if (noBreake) {
+      noBreake = false;
+      while(digitalRead(3));  // Wait for Output 3 to go LOW
+      breakMotor(RealSpeed, DefDelay);
+      Enable = false;
+      // TCCR1B &= ~(0b111<<CS10); // Stop Timer1 Clock
+      digitalWrite(3,LOW);
+      digitalWrite(5,LOW);
+      digitalWrite(6,LOW);
+      digitalWrite(11,LOW);
+      configTimerForMeasure();
+      RealSpeed = 0;
+      NoPaso = true;
+    }
+  }
+}
+
+void configTimerForMeasure(void){
+  // Configure Timer 1 for Frequency Measurement
+  TCCR1B = saveTCCMode;// same for TCCR1B
+  TIMSK1 = saveTIMMode;
+}
+
+void configTimerForPulse(void){
+  // Configure Timer 1 for Frequency Generation
+  TCCR1A = 0;// set entire TCCR1A register to 0
+  TCCR1B = 0;// same for TCCR1B
+  TCNT1  = 0;//initialize counter value to 0
+  // turn on CTC mode
+  TCCR1B |= (1 << WGM12);
+  // Set CS11 and CS10 bits for 64 prescaler
+  TCCR1B |= (1 << CS11) | (1 << CS10);  
+  // enable timer compare interrupt
+  TIMSK1 |= (1 << OCIE1A);
+  TIMSK1 |= (1 << OCIE1B);
+  // Save Timer 1 clock source
+  // savePrescale = TCCR1B & (0b111<<CS10);
+  // TCCR1B &= ~(0b111<<CS10); // Stop Timer1 Clock
 }
 
 ISR(TIMER1_COMPA_vect){   // Timer1 interrupt A toggles pin 5 and 6
@@ -126,57 +216,10 @@ ISR(TIMER1_COMPB_vect){   // Timer1 interrupt B toggles pin 11 and 3
   }
 }
 
-void loop() {
-  if (!digitalRead(A3)) {   // High Speed
-    DefSpeed = 200; 
-  } else {
-    DefSpeed = 50;
-  }
-  u8x8.setCursor(8,0);             // Column, Row
-  u8x8.print(DefSpeed);
-  u8x8.print("  ");
-  u8x8.setCursor(8,1);             // Column, Row
-  u8x8.print(DefAngle);
-  u8x8.print("  ");
-  u8x8.setCursor(8,2);             // Column, Row
-  u8x8.print(DefDelay);
-  u8x8.print("  ");
-  u8x8.setCursor(8,4);             // Column, Row
-  u8x8.print(RealSpeed);
-  u8x8.print("  ");
-
-  if (!digitalRead(0)) {    // Accelerate
-    if (DefSpeed > RealSpeed) {
-      NoPaso = true;
-    }
-    if (NoPaso) {
-      NoPaso = false;
-      // Turn on timer now if is was not already on
-      TCCR1B |= savePrescale;  // Restart Timer1 clock.
-      setWaveforms( 30 , DefAngle );
-      Enable = true;
-      accelerate(DefSpeed, DefDelay);
-      setWaveforms( DefSpeed , DefAngle );
-      RealSpeed = DefSpeed;
-    }
-    noBreake = true;
-  }
-
-  if (!digitalRead(1)) {    // Break
-    if (noBreake) {
-      noBreake = false;
-      while(digitalRead(3));  // Wait for Output 3 to go LOW
-      breakMotor(RealSpeed, DefDelay);
-      Enable = false;
-      TCCR1B &= ~(0b111<<CS10); // Stop Timer1 Clock
-      digitalWrite(3,LOW);
-      digitalWrite(5,LOW);
-      digitalWrite(6,LOW);
-      digitalWrite(11,LOW);
-      RealSpeed = 0;
-      NoPaso = true;
-    }
-  }
+// Interrupt service routine to count the pulse
+void countPulse() {
+  previousPulseTime = lastPulseTime;
+  lastPulseTime = millis();
 }
 
 void setWaveforms( unsigned long freq , int shift ) {

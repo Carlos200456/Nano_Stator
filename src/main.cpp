@@ -33,6 +33,7 @@ int DefSpeed = 0;
 int RealSpeed = 0;
 int DefDelay = 1500;
 int DefAngle = 90;
+int Steps = 0;
 
 
 // put function declarations here:
@@ -50,15 +51,16 @@ void configTimerForMeasure(void);
 
 
 void setup() {
-  pinMode( 0 , INPUT_PULLUP);  // Arduino Pin 0 = Button Accelerate.
-  pinMode(1, INPUT_PULLUP);    // Arduino Pin 1 = Button Break
-  pinMode(2, INPUT_PULLUP);    // Arduino Pin 2 = Frequency Feedback
-  pinMode(A3, INPUT_PULLUP);   // Arduino Pin A3 = Button High Speed
+  pinMode( 0, INPUT_PULLUP);  // Arduino Pin 0 = Button Accelerate.
+  pinMode( 1, INPUT_PULLUP);  // Arduino Pin 1 = Button Break
+  pinMode( 2, INPUT_PULLUP);  // Arduino Pin 2 = Frequency Feedback
+  pinMode(A3, INPUT_PULLUP);  // Arduino Pin A3 = Button High Speed
   
   pinMode(5, OUTPUT);
   pinMode(6, OUTPUT);
   pinMode(3, OUTPUT);
   pinMode(11, OUTPUT);
+  pinMode(13, OUTPUT);
 
   #ifdef OLED
   u8x8.begin();  // initialize with the I2C
@@ -109,6 +111,13 @@ void loop() {
   } else {
     DefSpeed = 50;
   }
+
+  if (previousPulseTime != lastPulseTime) {
+    // Calculate frequency in Hz
+    frequency = 1000000 / (lastPulseTime - previousPulseTime);
+    previousPulseTime = lastPulseTime;
+  }
+
   u8x8.setCursor(8,0);             // Column, Row
   u8x8.print(DefSpeed);
   u8x8.print("  ");
@@ -118,45 +127,77 @@ void loop() {
   u8x8.setCursor(8,2);             // Column, Row
   u8x8.print(DefDelay);
   u8x8.print("  ");
-  u8x8.setCursor(8,4);             // Column, Row
-  u8x8.print(frequency);
-  u8x8.print("  ");
-
-  if (previousPulseTime != lastPulseTime) {
-    // Calculate frequency in Hz
-    frequency = 1000 / (lastPulseTime - previousPulseTime);
-    previousPulseTime = lastPulseTime;
+  if (Steps == 490){
+    u8x8.setCursor(8,4);             // Column, Row
+    u8x8.print(frequency);
+    u8x8.print("  ");
   }
 
+  if (Steps == 100){
+    if (RealSpeed != 0){
+      u8x8.setCursor(8,3);             // Column, Row
+      u8x8.print("Mantain");
+      u8x8.print(" ");
+      Enable = false;
+    }
+  }
+
+  if (Steps == 400){
+    if (RealSpeed != 0){
+      configTimerForMeasure();
+      u8x8.setCursor(8,3);             // Column, Row
+      u8x8.print("Measure");
+      u8x8.print(" ");
+    }
+  }
+
+  if (Steps == 500){
+    Steps = 0;
+    if (RealSpeed == 0) {
+      configTimerForMeasure();
+      u8x8.setCursor(8,3);             // Column, Row
+      u8x8.print("Stopped");
+      u8x8.print(" ");
+    } else {
+      configTimerForPulse();
+      setWaveforms( RealSpeed , DefAngle );
+      u8x8.setCursor(8,3);             // Column, Row
+      u8x8.print("Running");
+      u8x8.print(" ");
+      Enable = true;
+    }
+  }
+  
+  Steps++;
+  
   if (!digitalRead(0)) {    // Accelerate
     if (DefSpeed > RealSpeed) {
       NoPaso = true;
     }
     if (NoPaso) {
       NoPaso = false;
+      u8x8.setCursor(8,3);             // Column, Row
+      u8x8.print("Accelera");
       configTimerForPulse();
-      // Turn on timer now if is was not already on
-      // TCCR1B |= savePrescale;  // Restart Timer1 clock.
       setWaveforms( 30 , DefAngle );
       Enable = true;
       accelerate(DefSpeed, DefDelay);
       setWaveforms( DefSpeed , DefAngle );
       RealSpeed = DefSpeed;
+      Steps = 0;
     }
     noBreake = true;
   }
 
   if (!digitalRead(1)) {    // Break
     if (noBreake) {
+      u8x8.setCursor(8,3);             // Column, Row
+      u8x8.print("Break");
+      u8x8.print("   ");
       noBreake = false;
       while(digitalRead(3));  // Wait for Output 3 to go LOW
       breakMotor(RealSpeed, DefDelay);
       Enable = false;
-      // TCCR1B &= ~(0b111<<CS10); // Stop Timer1 Clock
-      digitalWrite(3,LOW);
-      digitalWrite(5,LOW);
-      digitalWrite(6,LOW);
-      digitalWrite(11,LOW);
       configTimerForMeasure();
       RealSpeed = 0;
       NoPaso = true;
@@ -182,45 +223,54 @@ void configTimerForPulse(void){
   // enable timer compare interrupt
   TIMSK1 |= (1 << OCIE1A);
   TIMSK1 |= (1 << OCIE1B);
-  // Save Timer 1 clock source
-  // savePrescale = TCCR1B & (0b111<<CS10);
-  // TCCR1B &= ~(0b111<<CS10); // Stop Timer1 Clock
 }
 
 ISR(TIMER1_COMPA_vect){   // Timer1 interrupt A toggles pin 5 and 6
-  if (toggle1 && Enable){
-    digitalWrite(6,LOW);
-    delayMicroseconds(1);
-    digitalWrite(5,HIGH);
-    toggle1 = 0;
+  if (Enable) {
+    if (toggle1){
+      digitalWrite(6,LOW);
+      delayMicroseconds(1);
+      digitalWrite(5,HIGH);
+      toggle1 = 0;
+    }
+    else{
+      digitalWrite(5,LOW);
+      delayMicroseconds(1);
+      digitalWrite(6,HIGH);
+      toggle1 = 1;
+    }
   }
-  else{
+  else {
     digitalWrite(5,LOW);
-    delayMicroseconds(1);
-    digitalWrite(6,HIGH);
-    toggle1 = 1;
+    digitalWrite(6,LOW);
   }
 }
 
 ISR(TIMER1_COMPB_vect){   // Timer1 interrupt B toggles pin 11 and 3
-  if (toggle2 && Enable){
-    digitalWrite(11,LOW);
-    delayMicroseconds(1);
-    digitalWrite(3,HIGH);
-    toggle2 = 0;
+  if (Enable) {
+    if (toggle2){
+      digitalWrite(11,LOW);
+      delayMicroseconds(1);
+      digitalWrite(3,HIGH);
+      toggle2 = 0;
+    }
+    else{
+      digitalWrite(3,LOW);
+      delayMicroseconds(1);
+      digitalWrite(11,HIGH);
+      toggle2 = 1;
+    }
   }
-  else{
+  else {
     digitalWrite(3,LOW);
-    delayMicroseconds(1);
-    digitalWrite(11,HIGH);
-    toggle2 = 1;
+    digitalWrite(11,LOW);
   }
 }
 
 // Interrupt service routine to count the pulse
 void countPulse() {
   previousPulseTime = lastPulseTime;
-  lastPulseTime = millis();
+  lastPulseTime = micros();
 }
 
 void setWaveforms( unsigned long freq , int shift ) {

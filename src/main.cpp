@@ -274,6 +274,7 @@ void countPulse() {
 }
 
 void setWaveforms( unsigned long freq , int shift ) {
+  // TODO: Verify if the rigth value is (TCNT1 < 5)
   while (TCNT1 > 5);   // Wait for Timer1 to be in range
   TCNT1  = 0;//initialize counter value to 0
   // Calculate the number of clock cycles per toggle

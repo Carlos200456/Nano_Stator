@@ -14,7 +14,7 @@
 // OLED 0.96"
 // U8X8_SSD1306_128X64_NONAME_HW_I2C u8x8(/* reset=*/ U8X8_PIN_NONE);
 // OLED 1.3"
-U8G2_SH1106_128X64_NONAME_1_HW_I2C u8g2(U8G2_R2, /* reset=*/ U8X8_PIN_NONE);
+U8G2_SH1106_128X64_NONAME_F_HW_I2C u8g2(U8G2_R2, /* reset=*/ U8X8_PIN_NONE);
 // Full Graphic Smart Controller
 // U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, /* clock=*/ A5, /* data=*/ A4, /* CS=*/ 10, /* reset=*/ U8X8_PIN_NONE);
 #endif

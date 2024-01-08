@@ -40,7 +40,7 @@ byte savePrescale;
 int DefSpeed = 0;
 int RealSpeed = 0;
 int DefDelay = 1500;
-int DefAngle = 90;
+int DefAngle = 0;
 int DefSpeedPrev = 0;
 unsigned long Init_Time = 0;
 
@@ -60,16 +60,21 @@ void PrintStatus(String status);
 
 
 void setup() {
-  pinMode( 0, INPUT_PULLUP);  // Arduino Pin 0 = Button Accelerate.
+  // Set the pin as an input
+  pinMode( 13, INPUT_PULLUP); // Arduino Pin 0 = Button Accelerate.
   pinMode( 1, INPUT_PULLUP);  // Arduino Pin 1 = Button Break
   pinMode( 2, INPUT_PULLUP);  // Arduino Pin 2 = Frequency Feedback
   pinMode(A3, INPUT_PULLUP);  // Arduino Pin A3 = Button High Speed
-  
+  pinMode( 12, INPUT_PULLUP); // Arduino Pin 12 = Service Jumper
+  pinMode(A7, INPUT);         // Arduino Pin A7 = Desfasage
+  pinMode(A6, INPUT);         // Arduino Pin A6 = Max Speed
+  pinMode(A1, INPUT);         // Arduino Pin A1 = Speed Up Time
+  // Set the pin as an output
   pinMode(5, OUTPUT);
   pinMode(6, OUTPUT);
   pinMode(3, OUTPUT);
   pinMode(11, OUTPUT);
-  pinMode(13, OUTPUT);
+  // pinMode(4, OUTPUT);
 
   #ifdef OLED
   u8g2.begin();  // initialize with the I2C
@@ -108,10 +113,13 @@ void loop() {
   if (Init_Time == 0) Init_Time = millis();
   // Read the buttons
   if (!digitalRead(A3)) {   // High Speed
-    DefSpeed = 200; 
+    DefSpeed = map(analogRead(A6), 0, 1023, 120, 220);
   } else {
     DefSpeed = 50;
   }
+
+  DefAngle = map(analogRead(A7), 0, 1023, 60, 120);
+  DefDelay = map(analogRead(A1), 0, 1023, 800, 2500);
 
   if(DefSpeedPrev != DefSpeed){
     DefSpeedPrev = DefSpeed;
@@ -127,6 +135,7 @@ void loop() {
         PrintStatus("Keep Speed");
       #endif
       Enable = false;
+      delay(100);
     }
   }
 
@@ -176,6 +185,7 @@ void loop() {
       accelerate(DefSpeed, DefDelay);
       setWaveforms( DefSpeed , DefAngle );
       RealSpeed = DefSpeed;
+      Init_Time = 0;
     }
     noBreake = true;
   }
@@ -187,8 +197,10 @@ void loop() {
       #endif
       noBreake = false;
       while(digitalRead(3));  // Wait for Output 3 to go LOW
+      configTimerForPulse();
       breakMotor(RealSpeed, DefDelay);
       Enable = false;
+      delay(100);
       configTimerForMeasure();
       RealSpeed = 0;
       NoPaso = true;
@@ -213,8 +225,10 @@ void PrintStatus(String status){
   u8g2.print("Status: ");
   u8g2.setCursor(0,50);             // Column, Row
   u8g2.print("Real F: ");
+  u8g2.setCursor(0,60);             // Column, Row
+  u8g2.print("Debug : ");
   u8g2.setCursor(44,10);             // Column, Row
-  u8g2.print(DefSpeed);
+  if (RealSpeed > DefSpeed) u8g2.print(RealSpeed); else u8g2.print(DefSpeed);
   u8g2.print("  ");
   u8g2.setCursor(44,20);             // Column, Row
   u8g2.print(DefAngle);
@@ -227,6 +241,8 @@ void PrintStatus(String status){
   u8g2.print("  ");
   u8g2.setCursor(44,40);             // Column, Row
   u8g2.print(status);
+  u8g2.setCursor(44,60);             // Column, Row
+  if (NoPaso) u8g2.print("1"); else u8g2.print("0");
   u8g2.sendBuffer();
 }
 #endif

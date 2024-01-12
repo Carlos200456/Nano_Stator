@@ -30,6 +30,10 @@ volatile unsigned long lastPulseTime, previousPulseTime;
 
 uint8_t saveTCCMode;
 uint8_t saveTIMMode;
+uint8_t G1 = 5;
+uint8_t G2 = 6;
+uint8_t G3 = 3;
+uint8_t G4 = 11;
 
 bool NoPaso = true;
 bool noBreake = false;
@@ -41,6 +45,7 @@ int DefSpeed = 0;
 int RealSpeed = 0;
 int DefDelay = 1500;
 int DefAngle = 0;
+int DefInterval = 0;
 int DefSpeedPrev = 0;
 unsigned long Init_Time = 0;
 
@@ -52,6 +57,8 @@ void countPulse(void);
 void configTimerForPulse(void);
 void configTimerForMeasure(void);
 void PrintStatus(String status);
+void Reverse(void);
+void Fordward(void);
 
 // prescaler of 1 will get us 8MHz - 488Hz
 // User a higher prescaler for lower freqncies
@@ -65,16 +72,23 @@ void setup() {
   pinMode( 1, INPUT_PULLUP);  // Arduino Pin 1 = Button Break
   pinMode( 2, INPUT_PULLUP);  // Arduino Pin 2 = Frequency Feedback
   pinMode(A3, INPUT_PULLUP);  // Arduino Pin A3 = Button High Speed
-  pinMode( 12, INPUT_PULLUP); // Arduino Pin 12 = Service Jumper
+  pinMode( 12, INPUT_PULLUP); // Arduino Pin 12 = Reverse Jumper
   pinMode(A7, INPUT);         // Arduino Pin A7 = Desfasage
   pinMode(A6, INPUT);         // Arduino Pin A6 = Max Speed
   pinMode(A1, INPUT);         // Arduino Pin A1 = Speed Up Time
+  pinMode(A0, INPUT);         // Arduino Pin A0 = Energize Interval
+
+  // Set the Gx pin at LOW state
+  digitalWrite(G1,LOW);
+  digitalWrite(G2,LOW);
+  digitalWrite(G3,LOW);
+  digitalWrite(G4,LOW);
+
   // Set the pin as an output
-  pinMode(5, OUTPUT);
-  pinMode(6, OUTPUT);
-  pinMode(3, OUTPUT);
-  pinMode(11, OUTPUT);
-  // pinMode(4, OUTPUT);
+  pinMode(G1, OUTPUT);
+  pinMode(G2, OUTPUT);
+  pinMode(G3, OUTPUT);
+  pinMode(G4, OUTPUT);
 
   #ifdef OLED
   u8g2.begin();  // initialize with the I2C
@@ -99,10 +113,6 @@ void setup() {
   saveTCCMode = TCCR1B;
   // Save Timer 1 interrupt mask
   saveTIMMode = TIMSK1;
-  digitalWrite(3,LOW);
-  digitalWrite(5,LOW);
-  digitalWrite(6,LOW);
-  digitalWrite(11,LOW);
   NoPaso = true;
 
   // Attach the interrupt
@@ -111,15 +121,23 @@ void setup() {
 
 void loop() {
   if (Init_Time == 0) Init_Time = millis();
-  // Read the buttons
-  if (!digitalRead(A3)) {   // High Speed
+  // Read the High Speed button
+  if (!digitalRead(A3)) {
     DefSpeed = map(analogRead(A6), 0, 1023, 120, 220);
   } else {
-    DefSpeed = 50;
+    DefSpeed = 60;
   }
 
   DefAngle = map(analogRead(A7), 0, 1023, 60, 120);
   DefDelay = map(analogRead(A1), 0, 1023, 800, 2500);
+  DefInterval = map(analogRead(A0), 0, 1023, 2000, 5000);
+
+  // Read the Reverse jumper
+  if (!digitalRead(12)) {
+    Reverse();
+  } else {
+    Fordward();
+  }
 
   if(DefSpeedPrev != DefSpeed){
     DefSpeedPrev = DefSpeed;
@@ -153,7 +171,7 @@ void loop() {
     }
   }
 
-  if ((millis() - Init_Time) > 2000){
+  if ((millis() - Init_Time) > DefInterval){    // Energize Interval
     Init_Time = 0;
     if (RealSpeed == 0) {
       configTimerForMeasure();
@@ -226,7 +244,7 @@ void PrintStatus(String status){
   u8g2.setCursor(0,50);             // Column, Row
   u8g2.print("Real F: ");
   u8g2.setCursor(0,60);             // Column, Row
-  u8g2.print("Debug : ");
+  u8g2.print("KeepIn: ");
   u8g2.setCursor(44,10);             // Column, Row
   if (RealSpeed > DefSpeed) u8g2.print(RealSpeed); else u8g2.print(DefSpeed);
   u8g2.print("  ");
@@ -242,7 +260,8 @@ void PrintStatus(String status){
   u8g2.setCursor(44,40);             // Column, Row
   u8g2.print(status);
   u8g2.setCursor(44,60);             // Column, Row
-  if (NoPaso) u8g2.print("1"); else u8g2.print("0");
+  u8g2.print(DefInterval);
+  u8g2.print("  ");
   u8g2.sendBuffer();
 }
 #endif
@@ -271,42 +290,42 @@ void configTimerForPulse(void){
 ISR(TIMER1_COMPA_vect){   // Timer1 interrupt A toggles pin 5 and 6
   if (Enable) {
     if (toggle1){
-      digitalWrite(6,LOW);
+      digitalWrite(G2,LOW);
       delayMicroseconds(1);
-      digitalWrite(5,HIGH);
+      digitalWrite(G1,HIGH);
       toggle1 = 0;
     }
     else{
-      digitalWrite(5,LOW);
+      digitalWrite(G1,LOW);
       delayMicroseconds(1);
-      digitalWrite(6,HIGH);
+      digitalWrite(G2,HIGH);
       toggle1 = 1;
     }
   }
   else {
-    digitalWrite(5,LOW);
-    digitalWrite(6,LOW);
+    digitalWrite(G1,LOW);
+    digitalWrite(G2,LOW);
   }
 }
 
 ISR(TIMER1_COMPB_vect){   // Timer1 interrupt B toggles pin 11 and 3
   if (Enable) {
     if (toggle2){
-      digitalWrite(11,LOW);
+      digitalWrite(G4,LOW);
       delayMicroseconds(1);
-      digitalWrite(3,HIGH);
+      digitalWrite(G3,HIGH);
       toggle2 = 0;
     }
     else{
-      digitalWrite(3,LOW);
+      digitalWrite(G3,LOW);
       delayMicroseconds(1);
-      digitalWrite(11,HIGH);
+      digitalWrite(G4,HIGH);
       toggle2 = 1;
     }
   }
   else {
-    digitalWrite(3,LOW);
-    digitalWrite(11,LOW);
+    digitalWrite(G3,LOW);
+    digitalWrite(G4,LOW);
   }
 }
 
@@ -344,4 +363,18 @@ void breakMotor(int speed, int delayTime) {
     setWaveforms( i , DefAngle );
     delay(intdelay);
   }
+}
+
+void Reverse(void){
+  G1 = 3;
+  G2 = 11;
+  G3 = 5;
+  G4 = 6;
+}
+
+void Fordward(void){
+  G1 = 5;
+  G2 = 6;
+  G3 = 3;
+  G4 = 11;
 }

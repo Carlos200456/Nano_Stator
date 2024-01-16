@@ -39,7 +39,7 @@ bool NoPaso = true;
 bool noBreake = false;
 boolean toggle1 = 0;
 boolean toggle2 = 0;
-boolean Enable = false;
+boolean Enable_I = false;
 byte savePrescale;
 int DefSpeed = 0;
 int RealSpeed = 0;
@@ -147,17 +147,17 @@ void loop() {
     Init_Time = millis();
   }
 
-  if (((millis() - Init_Time) > 400) && Enable){
+  if (((millis() - Init_Time) > 400) && Enable_I){
     if (RealSpeed != 0){
       #ifdef OLED 
         PrintStatus("Keep Speed");
       #endif
-      Enable = false;
+      Enable_I = false;
       delay(100);
     }
   }
 
-  if (((millis() - Init_Time) > 1400) && !Enable){
+  if (((millis() - Init_Time) > 1400) && !Enable_I){
     if (RealSpeed != 0){
       configTimerForMeasure();
       // #ifdef OLED 
@@ -184,11 +184,12 @@ void loop() {
         PrintStatus("Energized");
       #endif
       setWaveforms( RealSpeed , DefAngle );
-      Enable = true;
+      Enable_I = true;
     }
   }
   
   if (!digitalRead(0)) {    // Accelerate
+    Init_Time = 0;
     if (DefSpeed > RealSpeed) {
       NoPaso = true;
     }
@@ -199,7 +200,7 @@ void loop() {
       #endif
       configTimerForPulse();
       setWaveforms( 30 , DefAngle );
-      Enable = true;
+      Enable_I = true;
       accelerate(DefSpeed, DefDelay);
       setWaveforms( DefSpeed , DefAngle );
       RealSpeed = DefSpeed;
@@ -217,7 +218,7 @@ void loop() {
       while(digitalRead(3));  // Wait for Output 3 to go LOW
       configTimerForPulse();
       breakMotor(RealSpeed, DefDelay);
-      Enable = false;
+      Enable_I = false;
       delay(100);
       configTimerForMeasure();
       RealSpeed = 0;
@@ -288,7 +289,7 @@ void configTimerForPulse(void){
 }
 
 ISR(TIMER1_COMPA_vect){   // Timer1 interrupt A toggles pin 5 and 6
-  if (Enable) {
+  if (Enable_I) {
     if (toggle1){
       digitalWrite(G2,LOW);
       delayMicroseconds(1);
@@ -309,7 +310,7 @@ ISR(TIMER1_COMPA_vect){   // Timer1 interrupt A toggles pin 5 and 6
 }
 
 ISR(TIMER1_COMPB_vect){   // Timer1 interrupt B toggles pin 11 and 3
-  if (Enable) {
+  if (Enable_I) {
     if (toggle2){
       digitalWrite(G4,LOW);
       delayMicroseconds(1);

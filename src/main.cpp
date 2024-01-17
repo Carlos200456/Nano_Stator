@@ -40,6 +40,7 @@ bool noBreake = false;
 boolean toggle1 = 0;
 boolean toggle2 = 0;
 boolean Enable_I = false;
+boolean Enable_C = false;
 byte savePrescale;
 int DefSpeed = 0;
 int RealSpeed = 0;
@@ -73,6 +74,7 @@ void setup() {
   pinMode( 2, INPUT_PULLUP);  // Arduino Pin 2 = Frequency Feedback
   pinMode(A3, INPUT_PULLUP);  // Arduino Pin A3 = Button High Speed
   pinMode( 12, INPUT_PULLUP); // Arduino Pin 12 = Reverse Jumper
+  pinMode( 7, INPUT_PULLUP);  // Arduino Pin 7 = Sin Cap Jumper
   pinMode(A7, INPUT);         // Arduino Pin A7 = Desfasage
   pinMode(A6, INPUT);         // Arduino Pin A6 = Max Speed
   pinMode(A1, INPUT);         // Arduino Pin A1 = Speed Up Time
@@ -139,6 +141,13 @@ void loop() {
     Fordward();
   }
 
+  // Read the Sin Cap jumper
+  if (!digitalRead(7)) {
+    Enable_C = false;
+  } else {
+    Enable_C = true;
+  }
+
   if(DefSpeedPrev != DefSpeed){
     DefSpeedPrev = DefSpeed;
     #ifdef OLED 
@@ -201,6 +210,7 @@ void loop() {
       configTimerForPulse();
       setWaveforms( 30 , DefAngle );
       Enable_I = true;
+      Enable_C = true;
       accelerate(DefSpeed, DefDelay);
       setWaveforms( DefSpeed , DefAngle );
       RealSpeed = DefSpeed;
@@ -214,8 +224,10 @@ void loop() {
       #ifdef OLED 
         PrintStatus("Breaking");
       #endif
+      Enable_I = true;
+      Enable_C = true;
       noBreake = false;
-      while(digitalRead(3));  // Wait for Output 3 to go LOW
+      while(digitalRead(G1));  // Wait for Output 1 to go LOW
       configTimerForPulse();
       breakMotor(RealSpeed, DefDelay);
       Enable_I = false;
@@ -310,7 +322,7 @@ ISR(TIMER1_COMPA_vect){   // Timer1 interrupt A toggles pin 5 and 6
 }
 
 ISR(TIMER1_COMPB_vect){   // Timer1 interrupt B toggles pin 11 and 3
-  if (Enable_I) {
+  if (Enable_I && Enable_C) {
     if (toggle2){
       digitalWrite(G4,LOW);
       delayMicroseconds(1);

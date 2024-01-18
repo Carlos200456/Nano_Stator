@@ -46,7 +46,7 @@ int DefSpeed = 0;
 int RealSpeed = 0;
 int DefDelay = 1500;
 int DefAngle = 0;
-int DefInterval = 0;
+unsigned long DefInterval = 0;
 int DefSpeedPrev = 0;
 unsigned long Init_Time = 0;
 
@@ -69,7 +69,7 @@ void Fordward(void);
 
 void setup() {
   // Set the pin as an input
-  pinMode( 13, INPUT_PULLUP); // Arduino Pin 0 = Button Accelerate.
+  pinMode( 13, INPUT_PULLUP); // Arduino Pin 13 = Button Accelerate.
   pinMode( 1, INPUT_PULLUP);  // Arduino Pin 1 = Button Break
   pinMode( 2, INPUT_PULLUP);  // Arduino Pin 2 = Frequency Feedback
   pinMode(A3, INPUT_PULLUP);  // Arduino Pin A3 = Button High Speed
@@ -145,7 +145,7 @@ void loop() {
   if (!digitalRead(7)) {
     Enable_C = false;
   } else {
-    Enable_C = true;
+    // Enable_C = true;
   }
 
   if(DefSpeedPrev != DefSpeed){
@@ -169,9 +169,9 @@ void loop() {
   if (((millis() - Init_Time) > 1400) && !Enable_I){
     if (RealSpeed != 0){
       configTimerForMeasure();
-      // #ifdef OLED 
-      //   PrintStatus("Measuring");
-      // #endif
+      #ifdef OLED 
+        PrintStatus("Measuring");
+      #endif
       if (previousPulseTime != lastPulseTime) {
         // Calculate frequency in Hz
         frequency = 1000000 / (lastPulseTime - previousPulseTime);
@@ -194,10 +194,11 @@ void loop() {
       #endif
       setWaveforms( RealSpeed , DefAngle );
       Enable_I = true;
+      Enable_C = false;
     }
   }
   
-  if (!digitalRead(0)) {    // Accelerate
+  if (!digitalRead(13)) {    // Accelerate
     Init_Time = 0;
     if (DefSpeed > RealSpeed) {
       NoPaso = true;
@@ -249,15 +250,15 @@ void PrintStatus(String status){
   u8g2.setCursor(0,10);             // Column, Row
   u8g2.print("Speed : ");
   u8g2.setCursor(0,20);             // Column, Row
-  u8g2.print("Angle : ");
+  u8g2.print("Fase  : ");
   u8g2.setCursor(0,30);             // Column, Row
-  u8g2.print("Delay : ");
+  u8g2.print("T Arr : ");
   u8g2.setCursor(0,40);             // Column, Row
-  u8g2.print("Status: ");
+  u8g2.print("I Mant: ");
   u8g2.setCursor(0,50);             // Column, Row
-  u8g2.print("Real F: ");
+  u8g2.print("Giro R: ");
   u8g2.setCursor(0,60);             // Column, Row
-  u8g2.print("KeepIn: ");
+  u8g2.print("Status: ");
   u8g2.setCursor(44,10);             // Column, Row
   if (RealSpeed > DefSpeed) u8g2.print(RealSpeed); else u8g2.print(DefSpeed);
   u8g2.print("  ");
@@ -267,14 +268,14 @@ void PrintStatus(String status){
   u8g2.setCursor(44,30);             // Column, Row
   u8g2.print(DefDelay);
   u8g2.print("  ");
+  u8g2.setCursor(44,40);             // Column, Row
+  u8g2.print(DefInterval);
+  u8g2.print("  ");
   u8g2.setCursor(44,50);             // Column, Row
   u8g2.print(frequency);
   u8g2.print("  ");
-  u8g2.setCursor(44,40);             // Column, Row
-  u8g2.print(status);
   u8g2.setCursor(44,60);             // Column, Row
-  u8g2.print(DefInterval);
-  u8g2.print("  ");
+  u8g2.print(status);
   u8g2.sendBuffer();
 }
 #endif
@@ -298,6 +299,10 @@ void configTimerForPulse(void){
   // enable timer compare interrupt
   TIMSK1 |= (1 << OCIE1A);
   TIMSK1 |= (1 << OCIE1B);
+  toggle1 = 0;
+  toggle2 = 0;
+  OCR1B = 0;
+  OCR1A = 0;
 }
 
 ISR(TIMER1_COMPA_vect){   // Timer1 interrupt A toggles pin 5 and 6
@@ -350,7 +355,7 @@ void countPulse() {
 
 void setWaveforms( unsigned long freq , int shift ) {
   // TODO: Verify if the rigth value is (TCNT1 < 5)
-  while (TCNT1 > 5);   // Wait for Timer1 to be in range
+  while (TCNT1 < 5);   // Wait for Timer1 to be in range
   TCNT1  = 0;//initialize counter value to 0
   // Calculate the number of clock cycles per toggle
   unsigned long clocks_per_toggle = (CLK / (freq * PRESCALER)) / 2;    // /2 becuase it takes 2 toggles to make a full wave
@@ -362,7 +367,7 @@ void setWaveforms( unsigned long freq , int shift ) {
 }
 
 void accelerate(int speed, int delayTime) {
-  if (RealSpeed == 0) RealSpeed = 30;
+  if (RealSpeed == 0) RealSpeed = 20;
   int intdelay = (delayTime / 2) / (speed - RealSpeed);
   for (int i = RealSpeed; i <= speed; i++) {
     setWaveforms( i , DefAngle );
@@ -371,8 +376,8 @@ void accelerate(int speed, int delayTime) {
 }
 
 void breakMotor(int speed, int delayTime) {
-  int intdelay = (delayTime / 2) / (speed - 30);
-  for (int i = speed; i >= 30; i--) {
+  int intdelay = (delayTime / 2) / (speed - 20);
+  for (int i = speed; i >= 20; i--) {
     setWaveforms( i , DefAngle );
     delay(intdelay);
   }

@@ -118,7 +118,7 @@ void setup() {
   NoPaso = true;
 
   // Attach the interrupt
-  attachInterrupt(digitalPinToInterrupt(INPUT_PIN), countPulse, RISING);
+  // attachInterrupt(digitalPinToInterrupt(INPUT_PIN), countPulse, RISING);
 }
 
 void loop() {
@@ -139,13 +139,6 @@ void loop() {
     Reverse();
   } else {
     Fordward();
-  }
-
-  // Read the Sin Cap jumper
-  if (!digitalRead(7)) {
-    Enable_C = false;
-  } else {
-    // Enable_C = true;
   }
 
   if(DefSpeedPrev != DefSpeed){
@@ -169,9 +162,9 @@ void loop() {
   if (((millis() - Init_Time) > 1400) && !Enable_I){
     if (RealSpeed != 0){
       configTimerForMeasure();
-      #ifdef OLED 
-        PrintStatus("Measuring");
-      #endif
+      // #ifdef OLED 
+      //   PrintStatus("Measuring");
+      // #endif
       if (previousPulseTime != lastPulseTime) {
         // Calculate frequency in Hz
         frequency = 1000000 / (lastPulseTime - previousPulseTime);
@@ -194,12 +187,11 @@ void loop() {
       #endif
       setWaveforms( RealSpeed , DefAngle );
       Enable_I = true;
-      Enable_C = false;
+      Enable_C = true;
     }
   }
   
   if (!digitalRead(13)) {    // Accelerate
-    Init_Time = 0;
     if (DefSpeed > RealSpeed) {
       NoPaso = true;
     }
@@ -209,15 +201,17 @@ void loop() {
         PrintStatus("Accelerating");
       #endif
       configTimerForPulse();
-      setWaveforms( 30 , DefAngle );
+      setWaveforms(RealSpeed, DefAngle);
       Enable_I = true;
       Enable_C = true;
       accelerate(DefSpeed, DefDelay);
       setWaveforms( DefSpeed , DefAngle );
       RealSpeed = DefSpeed;
+      delay(500);
       Init_Time = 0;
     }
     noBreake = true;
+    Init_Time = 0;
   }
 
   if (!digitalRead(1)) {    // Break
@@ -225,19 +219,19 @@ void loop() {
       #ifdef OLED 
         PrintStatus("Breaking");
       #endif
-      Enable_I = true;
-      Enable_C = true;
       noBreake = false;
       while(digitalRead(G1));  // Wait for Output 1 to go LOW
       configTimerForPulse();
+      setWaveforms(RealSpeed, DefAngle);
+      Enable_I = true;
+      Enable_C = true;
       breakMotor(RealSpeed, DefDelay);
+      delay(2000);
       Enable_I = false;
-      delay(100);
-      configTimerForMeasure();
+      // delay(100);
+      // configTimerForMeasure();
       RealSpeed = 0;
       NoPaso = true;
-      Init_Time = millis();
-      Init_Time -= 2000;
     }
   }
 
@@ -355,13 +349,14 @@ void countPulse() {
 
 void setWaveforms( unsigned long freq , int shift ) {
   // TODO: Verify if the rigth value is (TCNT1 < 5)
-  while (TCNT1 < 5);   // Wait for Timer1 to be in range
+  while (TCNT1 > 4);   // Wait for Timer1 to be in range
+  while (TCNT1 > (OCR1A - 4));   // Wait for Timer1 to be in range
   TCNT1  = 0;//initialize counter value to 0
   // Calculate the number of clock cycles per toggle
-  unsigned long clocks_per_toggle = (CLK / (freq * PRESCALER)) / 2;    // /2 becuase it takes 2 toggles to make a full wave
+  unsigned long clocks_per_toggle = (unsigned long)(CLK / (freq * PRESCALER)) / 2;    // /2 becuase it takes 2 toggles to make a full wave
   // set compare match register for Frequency Generation
   OCR1A = clocks_per_toggle;
-  unsigned long offset_clocks = (clocks_per_toggle * shift) / 180UL; // Do mult first to save precision
+  unsigned long offset_clocks = (unsigned long)((clocks_per_toggle * shift) / 180UL); // Do mult first to save precision
   // set compare match register for Angle Shift
   OCR1B= offset_clocks;
 }

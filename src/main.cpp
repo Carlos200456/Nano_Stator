@@ -70,9 +70,8 @@ void Fordward(void);
 
 void setup() {
   // Set the pin as an input
-  pinMode( 13, INPUT_PULLUP); // Arduino Pin 13 = Button Accelerate.
+  pinMode( 2, INPUT_PULLUP);  // Arduino Pin 2 = Button Accelerate.
   pinMode( 1, INPUT_PULLUP);  // Arduino Pin 1 = Button Break
-  pinMode( 2, INPUT_PULLUP);  // Arduino Pin 2 = Frequency Feedback
   pinMode(A3, INPUT_PULLUP);  // Arduino Pin A3 = Button High Speed
   pinMode(A2, INPUT_PULLUP);  // Arduino Pin A2 = Current Sensor
   pinMode( 12, INPUT_PULLUP); // Arduino Pin 12 = Reverse Jumper
@@ -157,7 +156,7 @@ void loop() {
     }
   }
 
-  if (((millis() - Init_Time) > 1000) && Enable_I){
+  if (((millis() - Init_Time) > 1000) && Enable_I){    // Energize Time
     if (RealSpeed != 0){
       #ifdef OLED 
         PrintStatus("Keep Speed");
@@ -184,7 +183,7 @@ void loop() {
     }
   }
   
-  if (!digitalRead(13)) {    // Accelerate
+  if (!digitalRead(2)) {       // Accelerate <---------------------------<<<<<<<<<<<<<<<<
     if (DefSpeed > RealSpeed) {
       NoPaso = true;
     }
@@ -207,7 +206,7 @@ void loop() {
     Init_Time = 0;
   }
 
-  if (!digitalRead(1)) {    // Break
+  if (!digitalRead(1)) {      // Break <---------------------------<<<<<<<<<<<<<<<<
     if (noBreake) {
       #ifdef OLED 
         PrintStatus("Breaking");

@@ -49,6 +49,7 @@ int DefAngle = 0;
 unsigned long DefInterval = 0;
 int DefSpeedPrev = 0;
 unsigned long Init_Time = 0;
+unsigned long Pulse_Time = 0;
 
 // put function declarations here:
 void setWaveforms(unsigned long, int);
@@ -56,7 +57,7 @@ void accelerate(int speed, int delayTime);
 void breakMotor(int speed, int delayTime);
 void countPulse(void);
 void configTimerForPulse(void);
-void configTimerForMeasure(void);
+bool CurrentSensor(void);
 void PrintStatus(String status);
 void Reverse(void);
 void Fordward(void);
@@ -73,6 +74,7 @@ void setup() {
   pinMode( 1, INPUT_PULLUP);  // Arduino Pin 1 = Button Break
   pinMode( 2, INPUT_PULLUP);  // Arduino Pin 2 = Frequency Feedback
   pinMode(A3, INPUT_PULLUP);  // Arduino Pin A3 = Button High Speed
+  pinMode(A2, INPUT_PULLUP);  // Arduino Pin A2 = Current Sensor
   pinMode( 12, INPUT_PULLUP); // Arduino Pin 12 = Reverse Jumper
   pinMode( 7, INPUT_PULLUP);  // Arduino Pin 7 = Sin Cap Jumper
   pinMode(A7, INPUT);         // Arduino Pin A7 = Desfasage
@@ -105,7 +107,7 @@ void setup() {
   u8g2.setCursor(0,20);             // Column, Row
   u8g2.print("Nano Starter");
   u8g2.setCursor(0,30);             // Column, Row
-  u8g2.print("Version 1.Git");     // SOFTWARE VERSION ---------------------------<<<<<<<<<<<<<<<<
+  u8g2.print("Version 2.Git");     // SOFTWARE VERSION ---------------------------<<<<<<<<<<<<<<<<
   u8g2.sendBuffer();
   delay(2000);
   u8g2.clearDisplay();
@@ -116,9 +118,6 @@ void setup() {
   // Save Timer 1 interrupt mask
   saveTIMMode = TIMSK1;
   NoPaso = true;
-
-  // Attach the interrupt
-  // attachInterrupt(digitalPinToInterrupt(INPUT_PIN), countPulse, RISING);
 }
 
 void loop() {
@@ -132,7 +131,7 @@ void loop() {
 
   DefAngle = map(analogRead(A7), 0, 1023, 60, 120);
   DefDelay = map(analogRead(A1), 0, 1023, 800, 2500);
-  DefInterval = map(analogRead(A0), 0, 1023, 2000, 5000);
+  DefInterval = map(analogRead(A0), 0, 1023, 3000, 8000);
 
   // Read the Reverse jumper
   if (!digitalRead(12)) {
@@ -149,34 +148,28 @@ void loop() {
     Init_Time = millis();
   }
 
-  if (((millis() - Init_Time) > 400) && Enable_I){
+  if (((millis() - Init_Time) > 100) && Enable_I){
+    if (RealSpeed != 0){
+      // Analisis de corriente de estator
+      #ifdef OLED 
+        if (CurrentSensor()) PrintStatus("Stator OK"); else PrintStatus("Stator Fail");
+      #endif
+    }
+  }
+
+  if (((millis() - Init_Time) > 1000) && Enable_I){
     if (RealSpeed != 0){
       #ifdef OLED 
         PrintStatus("Keep Speed");
       #endif
       Enable_I = false;
-      delay(100);
     }
   }
 
-  if (((millis() - Init_Time) > 1400) && !Enable_I){
-    if (RealSpeed != 0){
-      configTimerForMeasure();
-      // #ifdef OLED 
-      //   PrintStatus("Measuring");
-      // #endif
-      if (previousPulseTime != lastPulseTime) {
-        // Calculate frequency in Hz
-        frequency = 1000000 / (lastPulseTime - previousPulseTime);
-        previousPulseTime = lastPulseTime;
-      }
-    }
-  }
 
   if ((millis() - Init_Time) > DefInterval){    // Energize Interval
     Init_Time = 0;
     if (RealSpeed == 0) {
-      configTimerForMeasure();
       #ifdef OLED 
         PrintStatus("Stopped");
       #endif
@@ -228,8 +221,6 @@ void loop() {
       breakMotor(RealSpeed, DefDelay);
       delay(2000);
       Enable_I = false;
-      // delay(100);
-      // configTimerForMeasure();
       RealSpeed = 0;
       NoPaso = true;
     }
@@ -248,9 +239,9 @@ void PrintStatus(String status){
   u8g2.setCursor(0,30);             // Column, Row
   u8g2.print("T Arr : ");
   u8g2.setCursor(0,40);             // Column, Row
-  u8g2.print("I Mant: ");
+  u8g2.print("T Mant: ");
   u8g2.setCursor(0,50);             // Column, Row
-  u8g2.print("Giro R: ");
+  u8g2.print("Debug : ");
   u8g2.setCursor(0,60);             // Column, Row
   u8g2.print("Status: ");
   u8g2.setCursor(44,10);             // Column, Row
@@ -266,20 +257,13 @@ void PrintStatus(String status){
   u8g2.print(DefInterval);
   u8g2.print("  ");
   u8g2.setCursor(44,50);             // Column, Row
-  u8g2.print(frequency);
+  u8g2.print("_____");               // DEBUG MODE ---------------------------<<<<<<<<<<<<<<<<
   u8g2.print("  ");
   u8g2.setCursor(44,60);             // Column, Row
   u8g2.print(status);
   u8g2.sendBuffer();
 }
 #endif
-
-
-void configTimerForMeasure(void){
-  // Configure Timer 1 for Frequency Measurement
-  TCCR1B = saveTCCMode;// same for TCCR1B
-  TIMSK1 = saveTIMMode;
-}
 
 void configTimerForPulse(void){
   // Configure Timer 1 for Frequency Generation
@@ -390,4 +374,34 @@ void Fordward(void){
   G2 = 6;
   G3 = 3;
   G4 = 11;
+}
+
+// Analisis de corriente de estator
+bool CurrentSensor(void){
+  Pulse_Time = micros();
+  if (digitalRead(A2)) {
+    while (digitalRead(A2))
+    {
+      if ((micros() - Pulse_Time) > 100000) {
+        // Enable_I = false;
+        // RealSpeed = 0;
+        // NoPaso = true;
+        return false;
+      }
+      digitalWrite(9, LOW);
+    }
+    return true;
+  } else {
+    while (!digitalRead(A2))
+    {
+      if ((micros() - Pulse_Time) > 100000) {
+        // Enable_I = false;
+        // RealSpeed = 0;
+        // NoPaso = true;
+        return false;
+      }
+      digitalWrite(9, HIGH);
+    }
+    return true;
+  }
 }

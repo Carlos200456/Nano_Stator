@@ -40,7 +40,6 @@ bool noBreake = false;
 boolean toggle1 = 0;
 boolean toggle2 = 0;
 boolean Enable_I = false;
-boolean Enable_C = false;
 byte savePrescale;
 int DefSpeed = 0;
 int RealSpeed = 0;
@@ -50,6 +49,7 @@ unsigned long DefInterval = 0;
 int DefSpeedPrev = 0;
 unsigned long Init_Time = 0;
 unsigned long Pulse_Time = 0;
+String debugData = "";
 
 // put function declarations here:
 void setWaveforms(unsigned long, int);
@@ -59,6 +59,7 @@ void countPulse(void);
 void configTimerForPulse(void);
 bool CurrentSensor(void);
 void PrintStatus(String status);
+void PrintDebug(String debugData);
 void Reverse(void);
 void Fordward(void);
 
@@ -75,7 +76,6 @@ void setup() {
   pinMode(A3, INPUT_PULLUP);  // Arduino Pin A3 = Button High Speed
   pinMode(A2, INPUT_PULLUP);  // Arduino Pin A2 = Current Sensor
   pinMode( 12, INPUT_PULLUP); // Arduino Pin 12 = Reverse Jumper
-  pinMode( 7, INPUT_PULLUP);  // Arduino Pin 7 = Sin Cap Jumper
   pinMode(A7, INPUT);         // Arduino Pin A7 = Desfasage
   pinMode(A6, INPUT);         // Arduino Pin A6 = Max Speed
   pinMode(A1, INPUT);         // Arduino Pin A1 = Speed Up Time
@@ -129,7 +129,7 @@ void loop() {
   }
 
   DefAngle = map(analogRead(A7), 0, 1023, 60, 120);
-  DefDelay = map(analogRead(A1), 0, 1023, 800, 2500);
+  DefDelay = map(analogRead(A1), 0, 1023, 500, 2500);
   DefInterval = map(analogRead(A0), 0, 1023, 3000, 8000);
 
   // Read the Reverse jumper
@@ -147,16 +147,17 @@ void loop() {
     Init_Time = millis();
   }
 
-  if (((millis() - Init_Time) > 100) && Enable_I){
+  if (((millis() - Init_Time) > 50) && Enable_I){
     if (RealSpeed != 0){
       // Analisis de corriente de estator
       #ifdef OLED 
-        if (CurrentSensor()) PrintStatus("Stator OK"); else PrintStatus("Stator Fail");
+        if (CurrentSensor()) PrintDebug("Stator OK"); else PrintDebug("Stator Fail");
       #endif
+      
     }
   }
 
-  if (((millis() - Init_Time) > 1000) && Enable_I){    // Energize Time
+  if (((millis() - Init_Time) > 200) && Enable_I){    // Energize Time
     if (RealSpeed != 0){
       #ifdef OLED 
         PrintStatus("Keep Speed");
@@ -179,13 +180,15 @@ void loop() {
       #endif
       setWaveforms( RealSpeed , DefAngle );
       Enable_I = true;
-      Enable_C = true;
     }
   }
   
   if (!digitalRead(2)) {       // Accelerate <---------------------------<<<<<<<<<<<<<<<<
     if (DefSpeed > RealSpeed) {
       NoPaso = true;
+      #ifdef OLED
+        PrintDebug("_________");
+      #endif
     }
     if (NoPaso) {
       NoPaso = false;
@@ -195,11 +198,9 @@ void loop() {
       configTimerForPulse();
       setWaveforms(RealSpeed, DefAngle);
       Enable_I = true;
-      Enable_C = true;
       accelerate(DefSpeed, DefDelay);
       setWaveforms( DefSpeed , DefAngle );
       RealSpeed = DefSpeed;
-      delay(500);
       Init_Time = 0;
     }
     noBreake = true;
@@ -209,6 +210,7 @@ void loop() {
   if (!digitalRead(1)) {      // Break <---------------------------<<<<<<<<<<<<<<<<
     if (noBreake) {
       #ifdef OLED 
+        PrintDebug("_________");
         PrintStatus("Breaking");
       #endif
       noBreake = false;
@@ -216,9 +218,8 @@ void loop() {
       configTimerForPulse();
       setWaveforms(RealSpeed, DefAngle);
       Enable_I = true;
-      Enable_C = true;
       breakMotor(RealSpeed, DefDelay);
-      delay(2000);
+      delay(100);
       Enable_I = false;
       RealSpeed = 0;
       NoPaso = true;
@@ -228,6 +229,11 @@ void loop() {
   
 }
 #ifdef OLED 
+
+void PrintDebug (String debug){
+  debugData = debug;
+}
+
 void PrintStatus(String status){
   // Write a menu on display
   u8g2.clearBuffer();
@@ -256,7 +262,7 @@ void PrintStatus(String status){
   u8g2.print(DefInterval);
   u8g2.print("  ");
   u8g2.setCursor(44,50);             // Column, Row
-  u8g2.print("_____");               // DEBUG MODE ---------------------------<<<<<<<<<<<<<<<<
+  u8g2.print(debugData);               // DEBUG MODE ---------------------------<<<<<<<<<<<<<<<<
   u8g2.print("  ");
   u8g2.setCursor(44,60);             // Column, Row
   u8g2.print(status);
@@ -304,7 +310,7 @@ ISR(TIMER1_COMPA_vect){   // Timer1 interrupt A toggles pin 5 and 6
 }
 
 ISR(TIMER1_COMPB_vect){   // Timer1 interrupt B toggles pin 11 and 3
-  if (Enable_I && Enable_C) {
+  if (Enable_I) {
     if (toggle2){
       digitalWrite(G4,LOW);
       delayMicroseconds(1);
